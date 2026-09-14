@@ -263,50 +263,78 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
     setTaskCompletions(completionRows ?? []);
 
     if (normalizedProfile.team_id) {
-      const { data: teamRow } = await supabase
+      const { data: teamRow, error: teamError } = await supabase
         .from("teams")
         .select("id, name, tl_id")
         .eq("id", normalizedProfile.team_id)
         .maybeSingle();
+      if (teamError) {
+        setError(teamError.message);
+        setLoading(false);
+        return;
+      }
       setTeam(teamRow ?? null);
+    } else {
+      setTeam(null);
     }
 
     if (canSeeTlDashboard(normalizedProfile.role)) {
-      const { data: challengeRows } = await supabase
+      setBankers([]);
+      const { data: challengeRows, error: challengeLoadError } = await supabase
         .from("gamification_challenges")
         .select("id, tl_id, description, status, assigned_at, completed_at")
         .eq("tl_id", normalizedProfile.id)
         .eq("status", "active")
         .order("assigned_at", { ascending: false })
         .limit(1);
+      if (challengeLoadError) {
+        setError(challengeLoadError.message);
+        setLoading(false);
+        return;
+      }
 
       if (!challengeRows?.length) {
         const description = challengePool[Math.floor(Math.random() * challengePool.length)];
-        const { data: newChallenge } = await supabase
+        const { data: newChallenge, error: challengeInsertError } = await supabase
           .from("gamification_challenges")
           .insert({ tl_id: normalizedProfile.id, description, status: "active" })
           .select("id, tl_id, description, status, assigned_at, completed_at")
           .maybeSingle();
+        if (challengeInsertError) {
+          setError(challengeInsertError.message);
+          setLoading(false);
+          return;
+        }
         setChallenge(newChallenge ?? null);
       } else {
         setChallenge(challengeRows[0]);
       }
 
       if (normalizedProfile.team_id) {
-        const { data: bankerRows } = await supabase
+        const { data: bankerRows, error: bankerRowsError } = await supabase
           .from("users")
           .select("id, full_name")
           .eq("team_id", normalizedProfile.team_id)
           .eq("role", "banker");
+        if (bankerRowsError) {
+          setError(bankerRowsError.message);
+          setLoading(false);
+          return;
+        }
 
         if (bankerRows?.length) {
-          const { data: bankerProgressRows } = await supabase
+          const { data: bankerProgressRows, error: bankerProgressError } = await supabase
             .from("user_progress")
             .select("user_id, module_id, status")
             .in(
               "user_id",
               bankerRows.map((banker) => banker.id),
             );
+          if (bankerProgressError) {
+            setError(bankerProgressError.message);
+            setLoading(false);
+            return;
+          }
 
           const overview = bankerRows.map((banker) => {
             const rows = (bankerProgressRows ?? []).filter((row) => row.user_id === banker.id);
@@ -326,6 +354,9 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
           setBankers(overview);
         }
       }
+    } else {
+      setChallenge(null);
+      setBankers([]);
     }
 
     setLoading(false);

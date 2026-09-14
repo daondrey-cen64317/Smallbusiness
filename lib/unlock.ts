@@ -24,33 +24,34 @@ export function computeProgressState(
   const allowedCount = allowedModuleCount(startedAt);
   const rowByModule = new Map(progressRows.map((row) => [row.module_id, row]));
   const nextState = new Map<string, ProgressStatus>();
+  const orderedModules = [...modules].sort((a, b) => a.order_index - b.order_index);
   let previousIsCompleted = true;
 
-  for (const [index, module] of modules.entries()) {
-    const existing = rowByModule.get(module.id);
+  for (const moduleItem of orderedModules) {
+    const existing = rowByModule.get(moduleItem.id);
 
-    if (index >= allowedCount) {
-      nextState.set(module.id, "locked");
+    if (moduleItem.order_index > allowedCount) {
+      nextState.set(moduleItem.id, "locked");
       continue;
     }
 
     if (existing?.status === "completed") {
-      nextState.set(module.id, "completed");
+      nextState.set(moduleItem.id, "completed");
       previousIsCompleted = true;
       continue;
     }
 
     if (existing?.status === "in_progress") {
-      nextState.set(module.id, "in_progress");
+      nextState.set(moduleItem.id, "in_progress");
       previousIsCompleted = false;
       continue;
     }
 
     if (previousIsCompleted) {
-      nextState.set(module.id, "in_progress");
+      nextState.set(moduleItem.id, "in_progress");
       previousIsCompleted = false;
     } else {
-      nextState.set(module.id, "locked");
+      nextState.set(moduleItem.id, "locked");
     }
   }
 

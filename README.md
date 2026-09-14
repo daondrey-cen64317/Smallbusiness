@@ -38,7 +38,7 @@ npm run dev
 ## Included features
 
 - Email/password authentication screen
-- Role-aware dashboard (Admin, TL, Banker)
+- Role-aware experience (TL + Banker UI, admin access enforced via Supabase roles/policies)
 - Module timeline with lock/unlock logic (2 modules/week)
 - Module detail with video link, Tahák PDF button, and practical task checklist
 - Module completion when all practical tasks are checked
