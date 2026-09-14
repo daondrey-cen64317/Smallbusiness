@@ -346,7 +346,10 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
             return {
               id: banker.id,
               full_name: banker.full_name,
-              currentModule: completed >= 8 ? null : (inProgressModule?.order_index ?? Math.min(8, completed + 1)),
+              currentModule:
+                completed >= modulesRows.length
+                  ? null
+                  : (inProgressModule?.order_index ?? Math.min(modulesRows.length, completed + 1)),
               percentage: rows.length ? Math.round((completed / rows.length) * 100) : 0,
             };
           });

@@ -305,18 +305,13 @@ with check (
     user_id = public.current_user_profile_id()
     and (
       status = 'locked'::public.progress_status
-      or (
-        status = 'in_progress'::public.progress_status
-        and (
-          public.can_set_module_in_progress(user_id, module_id)
-          or exists (
-            select 1
-            from public.user_progress current_row
-            where current_row.id = user_progress.id
-              and current_row.status = 'completed'::public.progress_status
-          )
-        )
+      and exists (
+        select 1
+        from public.user_progress current_row
+        where current_row.id = user_progress.id
+          and current_row.status = 'in_progress'::public.progress_status
       )
+      or status = 'in_progress'::public.progress_status
       or (
         status = 'completed'::public.progress_status
         and public.can_set_module_in_progress(user_id, module_id)
