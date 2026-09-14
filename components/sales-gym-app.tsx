@@ -327,7 +327,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
             return {
               id: banker.id,
               full_name: banker.full_name,
-              currentModule: inProgressModule?.order_index ?? completed,
+              currentModule: inProgressModule?.order_index ?? Math.min(8, completed + 1),
               percentage: rows.length ? Math.round((completed / rows.length) * 100) : 0,
             };
           });
@@ -448,10 +448,10 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
         if (downstreamModuleIds.length) {
           const { error: downstreamError } = await supabase
             .from("user_progress")
-            .update({ status: "locked" })
+            .update({ status: "locked", completed_at: null })
             .eq("user_id", profile.id)
             .in("module_id", downstreamModuleIds)
-            .eq("status", "in_progress");
+            .neq("status", "locked");
 
           if (downstreamError) {
             setError(downstreamError.message);
@@ -617,15 +617,23 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
                   <label
                     key={task.id}
                     className="flex items-start gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                    aria-busy={pendingTaskIds.has(task.id)}
                   >
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={(event) => toggleTask(task.id, event.target.checked)}
                       disabled={pendingTaskIds.has(task.id)}
-                      className="mt-1 h-4 w-4 accent-emerald-600"
+                      className="mt-1 h-4 w-4 accent-emerald-600 disabled:cursor-wait disabled:opacity-60"
                     />
-                    <span>{task.description}</span>
+                    <span>
+                      {task.description}
+                      {pendingTaskIds.has(task.id) ? (
+                        <span className="ml-2 text-xs text-slate-500" role="status" aria-live="polite">
+                          Ukládám…
+                        </span>
+                      ) : null}
+                    </span>
                   </label>
                 );
               })}
