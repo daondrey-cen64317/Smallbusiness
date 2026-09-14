@@ -294,7 +294,19 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
       }
 
       if (!challengeRows?.length) {
-        const description = challengePool[Math.floor(Math.random() * challengePool.length)];
+        const { count: completedChallengeCount, error: completedCountError } = await supabase
+          .from("gamification_challenges")
+          .select("id", { count: "exact", head: true })
+          .eq("tl_id", normalizedProfile.id)
+          .eq("status", "completed");
+        if (completedCountError) {
+          setError(completedCountError.message);
+          setLoading(false);
+          return;
+        }
+
+        const challengeIndex = (completedChallengeCount ?? 0) % challengePool.length;
+        const description = challengePool[challengeIndex];
         const { data: newChallenge, error: challengeInsertError } = await supabase
           .from("gamification_challenges")
           .insert({ tl_id: normalizedProfile.id, description, status: "active" })

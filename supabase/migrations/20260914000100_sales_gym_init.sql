@@ -311,7 +311,18 @@ with check (
         where current_row.id = user_progress.id
           and current_row.status = 'in_progress'::public.progress_status
       )
-      or status = 'in_progress'::public.progress_status
+      or (
+        status = 'in_progress'::public.progress_status
+        and (
+          public.can_set_module_in_progress(user_id, module_id)
+          or exists (
+            select 1
+            from public.user_progress current_row
+            where current_row.id = user_progress.id
+              and current_row.status = 'completed'::public.progress_status
+          )
+        )
+      )
       or (
         status = 'completed'::public.progress_status
         and public.can_set_module_in_progress(user_id, module_id)
