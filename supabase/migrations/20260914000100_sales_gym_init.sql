@@ -21,10 +21,20 @@ create table if not exists public.users (
   created_at timestamptz not null default now()
 );
 
-alter table public.teams
-  add constraint teams_tl_id_fkey
-  foreign key (tl_id) references public.users(id)
-  on delete set null;
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'teams_tl_id_fkey'
+      and conrelid = 'public.teams'::regclass
+  ) then
+    alter table public.teams
+      add constraint teams_tl_id_fkey
+      foreign key (tl_id) references public.users(id)
+      on delete set null;
+  end if;
+end $$;
 
 create table if not exists public.modules (
   id uuid primary key default gen_random_uuid(),

@@ -237,7 +237,16 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
 
     if (updates.length) {
       for (const update of updates) {
-        await supabase.from("user_progress").update({ status: update.nextStatus }).eq("id", update.id);
+        const { error: updateError } = await supabase
+          .from("user_progress")
+          .update({ status: update.nextStatus })
+          .eq("id", update.id);
+
+        if (updateError) {
+          setError(updateError.message);
+          setLoading(false);
+          return;
+        }
       }
     }
 
@@ -373,15 +382,33 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
 
     try {
       if (checked) {
-        await supabase.from("task_completions").insert({ user_id: profile.id, task_id: taskId });
+        const { error: insertError } = await supabase
+          .from("task_completions")
+          .insert({ user_id: profile.id, task_id: taskId });
+        if (insertError) {
+          setError(insertError.message);
+          return;
+        }
       } else {
-        await supabase.from("task_completions").delete().eq("user_id", profile.id).eq("task_id", taskId);
+        const { error: deleteError } = await supabase
+          .from("task_completions")
+          .delete()
+          .eq("user_id", profile.id)
+          .eq("task_id", taskId);
+        if (deleteError) {
+          setError(deleteError.message);
+          return;
+        }
       }
 
-      const { data: completionRows } = await supabase
+      const { data: completionRows, error: completionLoadError } = await supabase
         .from("task_completions")
         .select("id, user_id, task_id, completed_at")
         .eq("user_id", profile.id);
+      if (completionLoadError) {
+        setError(completionLoadError.message);
+        return;
+      }
 
       setTaskCompletions(completionRows ?? []);
 
@@ -391,17 +418,28 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
 
       const currentProgress = progress.find((item) => item.module_id === selectedModule.id);
       if (currentProgress && allDone) {
-        await supabase
+        const { error: completeError } = await supabase
           .from("user_progress")
           .update({ status: "completed", completed_at: new Date().toISOString() })
           .eq("id", currentProgress.id);
+        if (completeError) {
+          setError(completeError.message);
+          return;
+        }
 
         setShowConfetti(true);
         setTimeout(() => setShowConfetti(false), 1500);
       }
 
       if (currentProgress && !allDone && currentProgress.status === "completed") {
-        await supabase.from("user_progress").update({ status: "in_progress", completed_at: null }).eq("id", currentProgress.id);
+        const { error: reopenError } = await supabase
+          .from("user_progress")
+          .update({ status: "in_progress", completed_at: null })
+          .eq("id", currentProgress.id);
+        if (reopenError) {
+          setError(reopenError.message);
+          return;
+        }
       }
 
       await bootstrap();
@@ -426,10 +464,14 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
     }
     const supabase = getSupabaseClient();
 
-    await supabase
+    const { error: challengeError } = await supabase
       .from("gamification_challenges")
       .update({ status: "completed", completed_at: new Date().toISOString() })
       .eq("id", challenge.id);
+    if (challengeError) {
+      setError(challengeError.message);
+      return;
+    }
 
     await bootstrap();
   }
