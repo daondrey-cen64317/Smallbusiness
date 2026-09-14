@@ -440,24 +440,6 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
           setError(reopenError.message);
           return;
         }
-
-        const downstreamModuleIds = modules
-          .filter((module) => module.order_index > selectedModule.order_index)
-          .map((module) => module.id);
-
-        if (downstreamModuleIds.length) {
-          const { error: downstreamError } = await supabase
-            .from("user_progress")
-            .update({ status: "locked", completed_at: null })
-            .eq("user_id", profile.id)
-            .in("module_id", downstreamModuleIds)
-            .neq("status", "locked");
-
-          if (downstreamError) {
-            setError(downstreamError.message);
-            return;
-          }
-        }
       }
 
       await bootstrap();
@@ -546,19 +528,23 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
             const lockedByTime = index + 1 > allowedCount;
 
             return (
-              <button
+              <Link
                 key={module.id}
-                onClick={() => {
+                href={`/modules/${module.order_index}`}
+                aria-disabled={status === "locked"}
+                onClick={(event) => {
+                  if (status === "locked") {
+                    event.preventDefault();
+                    return;
+                  }
                   setSelectedModuleId(module.order_index);
-                  router.push(`/modules/${module.order_index}`);
                 }}
-                disabled={status === "locked"}
                 className={`rounded-xl border p-3 text-left text-xs transition ${
                   status === "completed"
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                     : status === "in_progress"
                       ? "border-blue-300 bg-blue-50 text-blue-800"
-                      : "border-slate-200 bg-slate-50 text-slate-400"
+                      : "border-slate-200 bg-slate-50 text-slate-400 pointer-events-none"
                 }`}
               >
                 <div className="mb-2 flex items-center justify-between">
@@ -573,7 +559,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
                 </div>
                 <p className="line-clamp-3">{module.title}</p>
                 {lockedByTime ? <p className="mt-2 text-[10px]">Odemkne se dle harmonogramu</p> : null}
-              </button>
+              </Link>
             );
           })}
         </div>

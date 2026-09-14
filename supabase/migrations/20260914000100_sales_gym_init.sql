@@ -231,8 +231,8 @@ alter table public.gamification_challenges enable row level security;
 create policy "users_select_self_or_admin" on public.users
 for select using (auth_id = auth.uid() or public.is_admin());
 
-create policy "users_insert_self_or_admin" on public.users
-for insert with check (auth_id = auth.uid() or public.is_admin());
+create policy "users_insert_admin_only" on public.users
+for insert with check (public.is_admin());
 
 create policy "users_update_self_or_admin" on public.users
 for update using (auth_id = auth.uid() or public.is_admin())
