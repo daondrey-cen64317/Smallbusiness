@@ -27,7 +27,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 3. Apply SQL migration in Supabase:
 
-- `/home/runner/work/Smallbusiness/Smallbusiness/supabase/migrations/20260914000100_sales_gym_init.sql`
+- `supabase/migrations/20260914000100_sales_gym_init.sql`
 
 4. Start app:
 

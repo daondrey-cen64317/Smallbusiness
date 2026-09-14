@@ -14,7 +14,7 @@ import {
   Sparkles,
   Video,
 } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   GamificationChallenge,
   Module,
@@ -103,7 +103,17 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
     setLoading(true);
     setError(null);
 
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    let supabase;
+    try {
+      supabase = getSupabaseClient();
+    } catch (clientError) {
+      setError(clientError instanceof Error ? clientError.message : "Supabase konfigurace chybí.");
+      setLoading(false);
+      return;
+    }
+    const auth = supabase.auth;
+
+    const { data: sessionData, error: sessionError } = await auth.getSession();
 
     if (sessionError) {
       setError(sessionError.message);
@@ -137,7 +147,24 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
       return;
     }
 
-    setProfile(profileRow);
+    let normalizedProfile = profileRow;
+    if (!profileRow.started_at) {
+      const startedAt = new Date().toISOString();
+      const { error: startedAtError } = await supabase
+        .from("users")
+        .update({ started_at: startedAt })
+        .eq("id", profileRow.id);
+
+      if (startedAtError) {
+        setError(startedAtError.message);
+        setLoading(false);
+        return;
+      }
+
+      normalizedProfile = { ...profileRow, started_at: startedAt };
+    }
+
+    setProfile(normalizedProfile);
 
     const { data: modulesRows, error: modulesError } = await supabase
       .from("modules")
@@ -164,7 +191,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
     const { data: progressRows, error: progressError } = await supabase
       .from("user_progress")
       .select("id, user_id, module_id, status, completed_at")
-      .eq("user_id", profileRow.id);
+      .eq("user_id", normalizedProfile.id);
 
     if (progressError) {
       setError(progressError.message);
@@ -174,7 +201,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
 
     if (!progressRows?.length) {
       const initRows = modulesRows.map((module) => ({
-        user_id: profileRow.id,
+        user_id: normalizedProfile.id,
         module_id: module.id,
         status: "locked" as const,
       }));
@@ -190,7 +217,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
     const refreshProgress = await supabase
       .from("user_progress")
       .select("id, user_id, module_id, status, completed_at")
-      .eq("user_id", profileRow.id);
+      .eq("user_id", normalizedProfile.id);
 
     if (refreshProgress.error) {
       setError(refreshProgress.error.message);
@@ -198,26 +225,30 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
       return;
     }
 
-    const computed = computeProgressState(modulesRows, refreshProgress.data ?? [], profileRow.started_at);
-    const updates = (refreshProgress.data ?? [])
-      .filter((row) => computed.get(row.module_id) && row.status !== computed.get(row.module_id))
-      .map((row) => ({ id: row.id, status: computed.get(row.module_id) }));
+    const computed = computeProgressState(modulesRows, refreshProgress.data ?? [], normalizedProfile.started_at);
+    const updates: Array<{ id: string; nextStatus: "locked" | "in_progress" | "completed" }> = [];
+    for (const row of refreshProgress.data ?? []) {
+      const nextStatus = computed.get(row.module_id);
+      if (nextStatus && row.status !== nextStatus) {
+        updates.push({ id: row.id, nextStatus });
+      }
+    }
 
     if (updates.length) {
       for (const update of updates) {
-        await supabase.from("user_progress").update({ status: update.status }).eq("id", update.id);
+        await supabase.from("user_progress").update({ status: update.nextStatus }).eq("id", update.id);
       }
     }
 
     const finalProgress = await supabase
       .from("user_progress")
       .select("id, user_id, module_id, status, completed_at")
-      .eq("user_id", profileRow.id);
+      .eq("user_id", normalizedProfile.id);
 
     const { data: completionRows, error: completionError } = await supabase
       .from("task_completions")
       .select("id, user_id, task_id, completed_at")
-      .eq("user_id", profileRow.id);
+      .eq("user_id", normalizedProfile.id);
 
     if (completionError || finalProgress.error) {
       setError(completionError?.message ?? finalProgress.error?.message ?? "Načtení dat selhalo.");
@@ -230,16 +261,20 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
     setProgress(finalProgress.data ?? []);
     setTaskCompletions(completionRows ?? []);
 
-    if (profileRow.team_id) {
-      const { data: teamRow } = await supabase.from("teams").select("id, name, tl_id").eq("id", profileRow.team_id).maybeSingle();
+    if (normalizedProfile.team_id) {
+      const { data: teamRow } = await supabase
+        .from("teams")
+        .select("id, name, tl_id")
+        .eq("id", normalizedProfile.team_id)
+        .maybeSingle();
       setTeam(teamRow ?? null);
     }
 
-    if (profileRow.role === "tl") {
+    if (canSeeTlDashboard(normalizedProfile.role) && normalizedProfile.role !== "banker") {
       const { data: challengeRows } = await supabase
         .from("gamification_challenges")
         .select("id, tl_id, description, status, assigned_at, completed_at")
-        .eq("tl_id", profileRow.id)
+        .eq("tl_id", normalizedProfile.id)
         .eq("status", "active")
         .order("assigned_at", { ascending: false })
         .limit(1);
@@ -248,7 +283,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
         const description = challengePool[Math.floor(Math.random() * challengePool.length)];
         const { data: newChallenge } = await supabase
           .from("gamification_challenges")
-          .insert({ tl_id: profileRow.id, description, status: "active" })
+          .insert({ tl_id: normalizedProfile.id, description, status: "active" })
           .select("id, tl_id, description, status, assigned_at, completed_at")
           .maybeSingle();
         setChallenge(newChallenge ?? null);
@@ -256,11 +291,11 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
         setChallenge(challengeRows[0]);
       }
 
-      if (profileRow.team_id) {
+      if (normalizedProfile.team_id) {
         const { data: bankerRows } = await supabase
           .from("users")
           .select("id, full_name")
-          .eq("team_id", profileRow.team_id)
+          .eq("team_id", normalizedProfile.team_id)
           .eq("role", "banker");
 
         if (bankerRows?.length) {
@@ -300,6 +335,13 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
       void bootstrap();
     });
 
+    let supabase;
+    try {
+      supabase = getSupabaseClient();
+    } catch {
+      return;
+    }
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
@@ -318,6 +360,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
     if (!profile || !selectedModule) {
       return;
     }
+    const supabase = getSupabaseClient();
 
     if (checked) {
       await supabase.from("task_completions").insert({ user_id: profile.id, task_id: taskId });
@@ -355,6 +398,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
   }
 
   async function signOut() {
+    const supabase = getSupabaseClient();
     await supabase.auth.signOut();
     router.push("/login");
   }
@@ -363,6 +407,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
     if (!challenge) {
       return;
     }
+    const supabase = getSupabaseClient();
 
     await supabase
       .from("gamification_challenges")

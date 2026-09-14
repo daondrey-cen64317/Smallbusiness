@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { ShieldCheck, UserRound } from "lucide-react";
 
 export function LoginForm() {
@@ -26,6 +26,7 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
+      const supabase = getSupabaseClient();
       if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {

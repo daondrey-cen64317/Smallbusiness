@@ -105,9 +105,89 @@ as $$
   );
 $$;
 
+create or replace function public.can_set_module_in_progress(p_user_id uuid, p_module_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  with me as (
+    select started_at
+    from public.users
+    where id = p_user_id
+  ),
+  target as (
+    select order_index
+    from public.modules
+    where id = p_module_id
+  ),
+  unlock as (
+    select least(
+      8,
+      (floor(extract(epoch from (now() - coalesce(me.started_at, now()))) / 86400 / 7)::int * 2) + 2
+    ) as allowed_count
+    from me
+  )
+  select
+    exists (select 1 from target)
+    and (select order_index from target) <= (select allowed_count from unlock)
+    and not exists (
+      select 1
+      from public.modules previous_module
+      left join public.user_progress previous_progress
+        on previous_progress.module_id = previous_module.id
+       and previous_progress.user_id = p_user_id
+      where previous_module.order_index < (select order_index from target)
+        and coalesce(previous_progress.status, 'locked'::public.progress_status) <> 'completed'::public.progress_status
+    );
+$$;
+
+create or replace function public.module_tasks_completed(p_user_id uuid, p_module_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select not exists (
+    select 1
+    from public.tasks t
+    where t.module_id = p_module_id
+      and not exists (
+        select 1
+        from public.task_completions tc
+        where tc.task_id = t.id
+          and tc.user_id = p_user_id
+      )
+  );
+$$;
+
+create or replace function public.can_complete_task(p_user_id uuid, p_task_id uuid)
+returns boolean
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.tasks t
+    join public.user_progress up
+      on up.module_id = t.module_id
+     and up.user_id = p_user_id
+    where t.id = p_task_id
+      and up.status = 'in_progress'::public.progress_status
+      and public.can_set_module_in_progress(p_user_id, up.module_id)
+  );
+$$;
+
 grant execute on function public.current_user_profile_id() to authenticated;
 grant execute on function public.is_admin() to authenticated;
 grant execute on function public.is_tl() to authenticated;
+grant execute on function public.can_set_module_in_progress(uuid, uuid) to authenticated;
+grant execute on function public.module_tasks_completed(uuid, uuid) to authenticated;
+grant execute on function public.can_complete_task(uuid, uuid) to authenticated;
 
 create or replace function public.init_user_progress()
 returns trigger
@@ -190,12 +270,29 @@ for select using (
   )
 );
 
-create policy "progress_insert_self_or_admin" on public.user_progress
-for insert with check (public.is_admin() or user_id = public.current_user_profile_id());
+create policy "progress_insert_admin_only" on public.user_progress
+for insert with check (public.is_admin());
 
 create policy "progress_update_self_or_admin" on public.user_progress
 for update using (public.is_admin() or user_id = public.current_user_profile_id())
-with check (public.is_admin() or user_id = public.current_user_profile_id());
+with check (
+  public.is_admin()
+  or (
+    user_id = public.current_user_profile_id()
+    and (
+      status = 'locked'::public.progress_status
+      or (
+        status = 'in_progress'::public.progress_status
+        and public.can_set_module_in_progress(user_id, module_id)
+      )
+      or (
+        status = 'completed'::public.progress_status
+        and public.can_set_module_in_progress(user_id, module_id)
+        and public.module_tasks_completed(user_id, module_id)
+      )
+    )
+  )
+);
 
 create policy "progress_delete_admin" on public.user_progress
 for delete using (public.is_admin());
@@ -218,7 +315,13 @@ for select using (
 );
 
 create policy "task_completion_insert_self_or_admin" on public.task_completions
-for insert with check (public.is_admin() or user_id = public.current_user_profile_id());
+for insert with check (
+  public.is_admin()
+  or (
+    user_id = public.current_user_profile_id()
+    and public.can_complete_task(user_id, task_id)
+  )
+);
 
 create policy "task_completion_delete_self_or_admin" on public.task_completions
 for delete using (public.is_admin() or user_id = public.current_user_profile_id());
