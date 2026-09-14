@@ -201,18 +201,9 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
     }
 
     if (!progressRows?.length) {
-      const initRows = modulesRows.map((module) => ({
-        user_id: normalizedProfile.id,
-        module_id: module.id,
-        status: module.order_index === 1 ? ("in_progress" as const) : ("locked" as const),
-      }));
-
-      const { error: initError } = await supabase.from("user_progress").insert(initRows);
-      if (initError) {
-        setError(initError.message);
-        setLoading(false);
-        return;
-      }
+      setError("Profil nemá inicializovaný postup modulů. Požádej administrátora o opravu účtu.");
+      setLoading(false);
+      return;
     }
 
     const refreshProgress = await supabase
@@ -574,7 +565,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
               </h2>
               <p className="mt-1 text-sm text-slate-600">{selectedModule.description}</p>
             </div>
-            <Link
+            <a
               href={selectedModule.pdf_url}
               target="_blank"
               rel="noopener noreferrer"
@@ -582,7 +573,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
             >
               <Download className="h-4 w-4" />
               Tahák (PDF)
-            </Link>
+            </a>
           </div>
 
           <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">

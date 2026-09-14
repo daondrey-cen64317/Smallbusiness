@@ -232,7 +232,14 @@ create policy "users_select_self_or_admin" on public.users
 for select using (auth_id = auth.uid() or public.is_admin());
 
 create policy "users_insert_admin_only" on public.users
-for insert with check (public.is_admin());
+for insert with check (
+  public.is_admin()
+  or (
+    auth_id = auth.uid()
+    and role = 'admin'::public.user_role
+    and not exists (select 1 from public.users)
+  )
+);
 
 create policy "users_update_self_or_admin" on public.users
 for update using (auth_id = auth.uid() or public.is_admin())
@@ -293,7 +300,15 @@ with check (
       status = 'locked'::public.progress_status
       or (
         status = 'in_progress'::public.progress_status
-        and public.can_set_module_in_progress(user_id, module_id)
+        and (
+          public.can_set_module_in_progress(user_id, module_id)
+          or exists (
+            select 1
+            from public.user_progress current_row
+            where current_row.id = user_progress.id
+              and current_row.status = 'completed'::public.progress_status
+          )
+        )
       )
       or (
         status = 'completed'::public.progress_status
