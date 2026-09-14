@@ -5,7 +5,7 @@ const TOTAL_MODULES = 8;
 
 export function allowedModuleCount(startedAt: string | null): number {
   if (!startedAt) {
-    return 0;
+    return MODULES_PER_WEEK;
   }
 
   const startDate = new Date(startedAt).getTime();
@@ -31,13 +31,18 @@ export function computeProgressState(
 
     if (index >= allowedCount) {
       nextState.set(module.id, "locked");
-      previousIsCompleted = previousIsCompleted && existing?.status === "completed";
       continue;
     }
 
     if (existing?.status === "completed") {
       nextState.set(module.id, "completed");
       previousIsCompleted = true;
+      continue;
+    }
+
+    if (existing?.status === "in_progress") {
+      nextState.set(module.id, "in_progress");
+      previousIsCompleted = false;
       continue;
     }
 

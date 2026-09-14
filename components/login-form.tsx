@@ -9,7 +9,6 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [mode, setMode] = useState<"login" | "signup">("login");
   const [message, setMessage] = useState<string | null>(null);
   const router = useRouter();
 
@@ -17,8 +16,8 @@ export function LoginForm() {
     if (isLoading) {
       return "Prosím čekej…";
     }
-    return mode === "login" ? "Přihlásit" : "Vytvořit účet";
-  }, [isLoading, mode]);
+    return "Přihlásit";
+  }, [isLoading]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,20 +26,12 @@ export function LoginForm() {
 
     try {
       const supabase = getSupabaseClient();
-      if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) {
-          throw error;
-        }
-        router.push("/");
-        router.refresh();
-      } else {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) {
-          throw error;
-        }
-        setMessage("Účet byl vytvořen. Pokud je vyžadováno, potvrď e-mail a přihlas se.");
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        throw error;
       }
+      router.push("/");
+      router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Přihlášení selhalo.");
     } finally {
@@ -56,27 +47,6 @@ export function LoginForm() {
       </div>
 
       <p className="mb-5 text-sm text-slate-600">10 minut, 2× týdně. Mikro-learning pro bankovní prodej.</p>
-
-      <div className="mb-4 flex gap-2 rounded-lg bg-slate-100 p-1">
-        <button
-          type="button"
-          className={`w-1/2 rounded-md px-3 py-2 text-sm font-medium ${
-            mode === "login" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600"
-          }`}
-          onClick={() => setMode("login")}
-        >
-          Přihlášení
-        </button>
-        <button
-          type="button"
-          className={`w-1/2 rounded-md px-3 py-2 text-sm font-medium ${
-            mode === "signup" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600"
-          }`}
-          onClick={() => setMode("signup")}
-        >
-          Registrace
-        </button>
-      </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -112,6 +82,7 @@ export function LoginForm() {
       </form>
 
       {message ? <p className="mt-4 text-sm text-slate-600">{message}</p> : null}
+      <p className="mt-4 text-xs text-slate-500">Nové účty zakládá administrátor v Supabase.</p>
     </div>
   );
 }

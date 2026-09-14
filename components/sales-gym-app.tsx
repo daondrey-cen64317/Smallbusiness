@@ -440,6 +440,24 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
           setError(reopenError.message);
           return;
         }
+
+        const downstreamModuleIds = modules
+          .filter((module) => module.order_index > selectedModule.order_index)
+          .map((module) => module.id);
+
+        if (downstreamModuleIds.length) {
+          const { error: downstreamError } = await supabase
+            .from("user_progress")
+            .update({ status: "locked" })
+            .eq("user_id", profile.id)
+            .in("module_id", downstreamModuleIds)
+            .eq("status", "in_progress");
+
+          if (downstreamError) {
+            setError(downstreamError.message);
+            return;
+          }
+        }
       }
 
       await bootstrap();
