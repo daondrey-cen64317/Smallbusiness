@@ -62,5 +62,5 @@ export function completionPercentage(progressRows: UserProgress[]): number {
 }
 
 export function canSeeTlDashboard(role: UserRole): boolean {
-  return role === "tl" || role === "admin";
+  return role === "tl";
 }

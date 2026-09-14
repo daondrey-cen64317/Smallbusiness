@@ -58,6 +58,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
   const [error, setError] = useState<string | null>(null);
   const [selectedModuleId, setSelectedModuleId] = useState<number | undefined>(initialModuleId);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [pendingTaskIds, setPendingTaskIds] = useState<Set<string>>(new Set());
 
   const selectedModule = useMemo(() => {
     if (!modules.length) {
@@ -203,7 +204,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
       const initRows = modulesRows.map((module) => ({
         user_id: normalizedProfile.id,
         module_id: module.id,
-        status: "locked" as const,
+        status: module.order_index === 1 ? ("in_progress" as const) : ("locked" as const),
       }));
 
       const { error: initError } = await supabase.from("user_progress").insert(initRows);
@@ -270,7 +271,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
       setTeam(teamRow ?? null);
     }
 
-    if (canSeeTlDashboard(normalizedProfile.role) && normalizedProfile.role !== "banker") {
+    if (canSeeTlDashboard(normalizedProfile.role)) {
       const { data: challengeRows } = await supabase
         .from("gamification_challenges")
         .select("id, tl_id, description, status, assigned_at, completed_at")
@@ -360,41 +361,57 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
     if (!profile || !selectedModule) {
       return;
     }
+    if (pendingTaskIds.has(taskId)) {
+      return;
+    }
     const supabase = getSupabaseClient();
+    setPendingTaskIds((prev) => {
+      const next = new Set(prev);
+      next.add(taskId);
+      return next;
+    });
 
-    if (checked) {
-      await supabase.from("task_completions").insert({ user_id: profile.id, task_id: taskId });
-    } else {
-      await supabase.from("task_completions").delete().eq("user_id", profile.id).eq("task_id", taskId);
+    try {
+      if (checked) {
+        await supabase.from("task_completions").insert({ user_id: profile.id, task_id: taskId });
+      } else {
+        await supabase.from("task_completions").delete().eq("user_id", profile.id).eq("task_id", taskId);
+      }
+
+      const { data: completionRows } = await supabase
+        .from("task_completions")
+        .select("id, user_id, task_id, completed_at")
+        .eq("user_id", profile.id);
+
+      setTaskCompletions(completionRows ?? []);
+
+      const moduleTasks = tasks.filter((task) => task.module_id === selectedModule.id).map((task) => task.id);
+      const completedCount = (completionRows ?? []).filter((row) => moduleTasks.includes(row.task_id)).length;
+      const allDone = moduleTasks.length > 0 && completedCount === moduleTasks.length;
+
+      const currentProgress = progress.find((item) => item.module_id === selectedModule.id);
+      if (currentProgress && allDone) {
+        await supabase
+          .from("user_progress")
+          .update({ status: "completed", completed_at: new Date().toISOString() })
+          .eq("id", currentProgress.id);
+
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 1500);
+      }
+
+      if (currentProgress && !allDone && currentProgress.status === "completed") {
+        await supabase.from("user_progress").update({ status: "in_progress", completed_at: null }).eq("id", currentProgress.id);
+      }
+
+      await bootstrap();
+    } finally {
+      setPendingTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
     }
-
-    const { data: completionRows } = await supabase
-      .from("task_completions")
-      .select("id, user_id, task_id, completed_at")
-      .eq("user_id", profile.id);
-
-    setTaskCompletions(completionRows ?? []);
-
-    const moduleTasks = tasks.filter((task) => task.module_id === selectedModule.id).map((task) => task.id);
-    const completedCount = (completionRows ?? []).filter((row) => moduleTasks.includes(row.task_id)).length;
-    const allDone = moduleTasks.length > 0 && completedCount === moduleTasks.length;
-
-    const currentProgress = progress.find((item) => item.module_id === selectedModule.id);
-    if (currentProgress && allDone) {
-      await supabase
-        .from("user_progress")
-        .update({ status: "completed", completed_at: new Date().toISOString() })
-        .eq("id", currentProgress.id);
-
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 1500);
-    }
-
-    if (currentProgress && !allDone && currentProgress.status === "completed") {
-      await supabase.from("user_progress").update({ status: "in_progress", completed_at: null }).eq("id", currentProgress.id);
-    }
-
-    await bootstrap();
   }
 
   async function signOut() {
@@ -514,6 +531,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
             <Link
               href={selectedModule.pdf_url}
               target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700"
             >
               <Download className="h-4 w-4" />
@@ -544,6 +562,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
                       type="checkbox"
                       checked={checked}
                       onChange={(event) => toggleTask(task.id, event.target.checked)}
+                      disabled={pendingTaskIds.has(task.id)}
                       className="mt-1 h-4 w-4 accent-emerald-600"
                     />
                     <span>{task.description}</span>
