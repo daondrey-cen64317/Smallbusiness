@@ -7,7 +7,6 @@ import { Session } from "@supabase/supabase-js";
 import {
   Award,
   CheckCircle2,
-  Circle,
   Clock3,
   Download,
   Lock,
@@ -297,7 +296,9 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
   }, [router]);
 
   useEffect(() => {
-    bootstrap();
+    queueMicrotask(() => {
+      void bootstrap();
+    });
 
     const {
       data: { subscription },
