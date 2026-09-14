@@ -35,7 +35,7 @@ const challengePool = [
 type BankerOverview = {
   id: string;
   full_name: string;
-  currentModule: number;
+  currentModule: number | null;
   percentage: number;
 };
 
@@ -346,7 +346,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
             return {
               id: banker.id,
               full_name: banker.full_name,
-              currentModule: inProgressModule?.order_index ?? Math.min(8, completed + 1),
+              currentModule: completed >= 8 ? null : (inProgressModule?.order_index ?? Math.min(8, completed + 1)),
               percentage: rows.length ? Math.round((completed / rows.length) * 100) : 0,
             };
           });
@@ -600,10 +600,11 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
               href={selectedModule.pdf_url}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label="Stáhnout tahák ve formátu PDF (otevře se v nové kartě)"
               className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700"
             >
               <Download className="h-4 w-4" />
-              Tahák (PDF)
+              Tahák (PDF, nová karta)
             </a>
           </div>
 
@@ -651,7 +652,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
       ) : null}
 
       <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-2 text-sm font-semibold text-slate-900">Next Action</h2>
+        <h2 className="mb-2 text-sm font-semibold text-slate-900">Další krok</h2>
         <p className="text-sm text-slate-700">
           {selectedModule
             ? `Dokonči modul ${selectedModule.order_index}: nejdřív video, potom všechny aktivity.`
@@ -662,7 +663,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
       {canSeeTlDashboard(profile.role) ? (
         <section className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <h2 className="mb-3 text-sm font-semibold text-slate-900">Team Progress</h2>
+            <h2 className="mb-3 text-sm font-semibold text-slate-900">Postup týmu</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
@@ -676,7 +677,9 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
                   {bankers.map((banker) => (
                     <tr key={banker.id} className="border-t border-slate-100">
                       <td className="py-2 text-slate-800">{banker.full_name}</td>
-                      <td className="py-2 text-slate-600">M{banker.currentModule || 1}</td>
+                      <td className="py-2 text-slate-600">
+                        {banker.currentModule ? `M${banker.currentModule}` : "Dokončeno"}
+                      </td>
                       <td className="py-2 text-slate-600">{banker.percentage}%</td>
                     </tr>
                   ))}
@@ -686,7 +689,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <h2 className="mb-3 text-sm font-semibold text-slate-900">Active Challenges</h2>
+            <h2 className="mb-3 text-sm font-semibold text-slate-900">Aktivní výzvy</h2>
             {challenge ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div className="mb-2 inline-flex items-center gap-2 text-amber-700">
@@ -699,7 +702,7 @@ export function SalesGymApp({ initialModuleId }: SalesGymAppProps) {
                   className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white"
                 >
                   <Sparkles className="h-4 w-4" />
-                  Mark as Done
+                  Označit jako splněné
                 </button>
               </div>
             ) : (
